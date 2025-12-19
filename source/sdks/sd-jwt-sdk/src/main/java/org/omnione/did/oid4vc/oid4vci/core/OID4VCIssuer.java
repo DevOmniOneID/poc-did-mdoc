@@ -17,27 +17,30 @@
 package org.omnione.did.oid4vc.oid4vci.core;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonMappingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import java.math.BigInteger;
+import java.security.PrivateKey;
+import java.security.PublicKey;
+import java.security.interfaces.ECPrivateKey;
+import java.security.interfaces.ECPublicKey;
+import java.security.interfaces.RSAPrivateKey;
+import java.time.temporal.ChronoUnit;
+import java.util.Base64;
+import java.util.HashMap;
+import java.util.Map;
+import org.omnione.did.oid4vc.exception.OID4VCException;
 import org.omnione.did.sdjwt.core.builder.SDJWTBuilder;
-import org.omnione.did.sdjwt.datamodel.SDJWT;
-import org.omnione.did.sdjwt.exception.SDJWTException;
 import org.omnione.did.sdjwt.crypto.JWSSigner;
 import org.omnione.did.sdjwt.crypto.SignedJWT;
 import org.omnione.did.sdjwt.crypto.impl.ECDSASigner;
 import org.omnione.did.sdjwt.crypto.impl.RSASSASigner;
-import org.omnione.did.oid4vc.exception.OID4VCException;
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import org.omnione.did.wallet.key.WalletManagerInterface;
+import org.omnione.did.sdjwt.datamodel.DisclosureFrame;
+import org.omnione.did.sdjwt.datamodel.SDJWT;
+import org.omnione.did.sdjwt.exception.SDJWTException;
 import org.omnione.did.wallet.exception.WalletException;
-
-import java.security.PrivateKey;
-import java.security.PublicKey;
-import java.security.interfaces.ECPrivateKey;
-import java.security.interfaces.RSAPrivateKey;
-import java.time.temporal.ChronoUnit;
-import java.util.HashMap;
-import java.util.Map;
+import org.omnione.did.wallet.key.WalletManagerInterface;
 
 public class OID4VCIssuer {
 
@@ -99,15 +102,80 @@ public class OID4VCIssuer {
     return sdJwt.toString();
   }
 
+  public String issueCredential(String credentialType,
+      Map<String, Object> subjectClaims,
+      DisclosureFrame disclosureFrame,
+      PublicKey holderPublicKey) throws OID4VCException {
+
+    try {
+      disclosureFrame.validate(subjectClaims);
+    } catch (SDJWTException e) {
+      throw new OID4VCException("Invalid disclosure frame for given claims", e);
+    }
+
+    SDJWTBuilder builder = new SDJWTBuilder()
+        .issuer(issuerId)
+        .issuedAtNow()
+        .expiresIn(365, ChronoUnit.DAYS)
+        .verifiableCredentialType(credentialType);
+
+    if (holderPublicKey != null) {
+      Map<String, Object> cnf = createConfirmationClaim(holderPublicKey);
+      builder.confirmation(cnf);
+    }
+
+    builder.buildWithStructuredFrame(subjectClaims, disclosureFrame);
+
+    SDJWT sdJwt = builder.build(this::signJWT);
+
+    return sdJwt.toString();
+  }
+
+  public String issueCredential(String credentialType,
+      Map<String, Object> subjectClaims,
+      Map<String, Object> disclosureFrameMap,
+      PublicKey holderPublicKey) throws OID4VCException {
+
+    try {
+      DisclosureFrame disclosureFrame = DisclosureFrame.fromMap(disclosureFrameMap);
+      return issueCredential(credentialType, subjectClaims, disclosureFrame, holderPublicKey);
+    } catch (SDJWTException e) {
+      throw new OID4VCException("Failed to create disclosure frame from map", e);
+    }
+  }
+
   private Map<String, Object> createConfirmationClaim(PublicKey holderPublicKey) {
+    Map<String, Object> jwkMap = new HashMap<>();
+    jwkMap.put("kty", getKeyType(holderPublicKey));
+    jwkMap.put("use", "sig");
 
-    return Map.of(
-        "jwk", Map.of(
-            "kty", getKeyType(holderPublicKey),
-            "use", "sig"
+    if (holderPublicKey.getAlgorithm().equals("EC")) {
+      try {
+        ECPublicKey ecPublicKey = (ECPublicKey) holderPublicKey;
 
-        )
-    );
+        String crv = getCurveNameFromECKey(ecPublicKey);
+        jwkMap.put("crv", crv);
+
+        BigInteger x = ecPublicKey.getW().getAffineX();
+        BigInteger y = ecPublicKey.getW().getAffineY();
+
+        String xBase64 = Base64.getUrlEncoder()
+            .withoutPadding()
+            .encodeToString(x.toByteArray());
+        String yBase64 = Base64.getUrlEncoder()
+            .withoutPadding()
+            .encodeToString(y.toByteArray());
+
+        jwkMap.put("x", xBase64);
+        jwkMap.put("y", yBase64);
+      } catch (Exception e) {
+        throw new IllegalArgumentException("Failed to extract EC key parameters", e);
+      }
+    } else if (holderPublicKey.getAlgorithm().equals("RSA")) {
+      // TODO
+    }
+
+    return Map.of("jwk", jwkMap);
   }
 
   private String getKeyType(PublicKey publicKey) {
@@ -117,6 +185,22 @@ public class OID4VCIssuer {
       return "EC";
     } else {
       throw new IllegalArgumentException("Unsupported key type: " + publicKey.getAlgorithm());
+    }
+  }
+
+  private String getCurveNameFromECKey(java.security.interfaces.ECPublicKey ecPublicKey) {
+    java.security.spec.ECParameterSpec ecParams = ecPublicKey.getParams();
+    int keySize = ecParams.getOrder().bitLength();
+
+    switch (keySize) {
+      case 256:
+        return "P-256";
+      case 384:
+        return "P-384";
+      case 521:
+        return "P-521";
+      default:
+        throw new IllegalArgumentException("Unsupported EC key size: " + keySize);
     }
   }
 
@@ -161,6 +245,7 @@ public class OID4VCIssuer {
       Map<String, Object> header = new HashMap<>();
       header.put("alg", algorithm);
       header.put("typ", "vc+sd-jwt");
+      header.put("kid", issuerId);
 
       Map<String, Object> payloadMap = new ObjectMapper().readValue(payloadJson,
           new TypeReference<Map<String, Object>>() {
@@ -203,6 +288,7 @@ public class OID4VCIssuer {
       Map<String, Object> header = new HashMap<>();
       header.put("alg", algorithm);
       header.put("typ", "vc+sd-jwt");
+      header.put("kid", issuerId);
 
       Map<String, Object> payloadMap = new ObjectMapper().readValue(payloadJson,
           new TypeReference<Map<String, Object>>() {
