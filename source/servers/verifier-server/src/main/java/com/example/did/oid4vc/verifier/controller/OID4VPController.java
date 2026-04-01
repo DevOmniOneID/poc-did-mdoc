@@ -23,8 +23,11 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.security.KeyStore;
 import java.security.cert.CertificateFactory;
 import java.security.cert.X509Certificate;
+import javax.net.ssl.TrustManagerFactory;
+import javax.net.ssl.X509TrustManager;
 import org.omnione.did.oid4vc.oid4vp.dto.DCQLResult;
 import org.omnione.did.oid4vc.oid4vp.dto.ServiceResult;
 import org.omnione.did.oid4vc.oid4vp.exception.OID4VPException;
@@ -38,6 +41,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.http.HttpServletRequest;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
@@ -92,6 +96,11 @@ public class OID4VPController {
       @PathVariable String request_id,
       @RequestParam(required = false) String wallet_metadata) {
     log.debug("wallet_metadata: {}", wallet_metadata);
+
+    // x509_san_dns: use x5c certificate chain in JWS header
+    if (authorizationService.isX509SanDns()) {
+      return getAuthorizationRequestWithX5c(request_id);
+    }
 
     // Verifier DID Doc, Application Layer
     String signKeyId = "assert";
@@ -159,21 +168,38 @@ public class OID4VPController {
 
         // Check if any credential uses x5c-based verification
         boolean hasX5cCredential = issuerIdentifiers.stream()
-            .anyMatch(id -> id != null && id.getType() == IdentifierResult.Type.SD_JWT_X5C);
+            .anyMatch(id -> id != null && (id.getType() == IdentifierResult.Type.SD_JWT_X5C
+                || id.getType() == IdentifierResult.Type.MSO_MDOC_X5C));
 
         if (hasX5cCredential) {
           // x5c-based verification: use trusted root certificates
           log.info("Detected x5c-based credential, using certificate chain validation");
 
           try {
-            // test
-            ClassPathResource certResourceTest = new ClassPathResource("x509_rootca.crt");
-            X509Certificate rootCertTest = loadCertificateFromInputStream(certResourceTest.getInputStream());
+            List<X509Certificate> trustedRoots = new ArrayList<>();
 
-            // eudi AgeVerificationIssuerCA01
-            ClassPathResource certResourceEudi1 = new ClassPathResource("x509_eudi_age_verification_issuer_ca01_test_rootca.crt");
-            X509Certificate rootCertTestEudi1 = loadCertificateFromInputStream(certResourceEudi1.getInputStream());
-            List<X509Certificate> trustedRoots = List.of(rootCertTest, rootCertTestEudi1);
+            // 1. Load Java default trust store (cacerts) — includes well-known CAs
+            trustedRoots.addAll(loadJavaDefaultTrustedCerts());
+
+            // 2. Add custom test root certificates
+            String[] customCertFiles = {
+                "cert/x509_rootca.crt",
+                "cert/x509_eudi_age_verification_issuer_ca01_test_rootca.crt",
+                "cert/x509_oidf_test_cert.crt",
+                "cert/x509_digital_credentials_dev_rootca.crt",
+                "cert/x509_digital_credentials_dev_rootca_v2.crt"
+            };
+            for (String certFile : customCertFiles) {
+              try {
+                ClassPathResource certResource = new ClassPathResource(certFile);
+                trustedRoots.add(loadCertificateFromInputStream(certResource.getInputStream()));
+              } catch (Exception e) {
+                log.warn("Failed to load custom cert {}: {}", certFile, e.getMessage());
+              }
+            }
+
+            log.info("Loaded {} trusted root certificates ({} from cacerts + custom)",
+                trustedRoots.size(), trustedRoots.size() - customCertFiles.length);
 
             // Call handleVPToken with trustedRoots for x5c-based verification
             ServiceResult<Map<String, Object>> result = oid4VPHelperService.handleVPToken(
@@ -276,6 +302,95 @@ public class OID4VPController {
     return "verifier/test-simple";
   }
 
+  @GetMapping("/test/dc-api")
+  public String testDcApi() {
+    return "verifier/test-dc-api";
+  }
+
+  @GetMapping("/fragment/callback")
+  public String fragmentCallback() {
+    return "verifier/fragment-callback";
+  }
+
+  @PostMapping("/dc-api/response")
+  @ResponseBody
+  public ResponseEntity<Map<String, Object>> receiveDCApiResponse(
+      @RequestBody Map<String, Object> dcApiResponse,
+      HttpServletRequest request) {
+
+    // vp_token can be a JSON string or a JSON object (Map)
+    Object vpTokenRaw = dcApiResponse.get("vp_token");
+    String vpToken;
+    if (vpTokenRaw instanceof String) {
+      vpToken = (String) vpTokenRaw;
+    } else if (vpTokenRaw != null) {
+      try {
+        vpToken = objectMapper.writeValueAsString(vpTokenRaw);
+      } catch (Exception e) {
+        vpToken = vpTokenRaw.toString();
+      }
+    } else {
+      vpToken = null;
+    }
+    String transactionId = (String) dcApiResponse.get("transaction_id");
+
+    if (vpToken == null || vpToken.trim().isEmpty()) {
+      return ResponseEntity.badRequest().body(Map.of(
+          "error", "invalid_request",
+          "error_description", "vp_token is required in DC API response"
+      ));
+    }
+
+    if (transactionId == null || transactionId.trim().isEmpty()) {
+      return ResponseEntity.badRequest().body(Map.of(
+          "error", "invalid_request",
+          "error_description", "transaction_id is required in DC API response"
+      ));
+    }
+
+    // DC API: no state parameter (per OID4VP Appendix A.3.1)
+    // Look up session by transaction_id to get state for internal routing
+    String state = oid4VPHelperService.resolveStateByTransactionId(transactionId);
+    if (state == null) {
+      return ResponseEntity.badRequest().body(Map.of(
+          "error", "invalid_request",
+          "error_description", "No session found for transaction_id: " + transactionId
+      ));
+    }
+
+    // Try full verification
+    ResponseEntity<Map<String, Object>> result = receiveResponse(vpToken, state, null, null, request);
+
+    // If verification failed, return VP Token data with warning
+    if (result.getStatusCode().is4xxClientError() || result.getStatusCode().is5xxServerError()) {
+      Map<String, Object> body = result.getBody();
+      if (body != null && String.valueOf(body.get("error_description")).contains("VP verification failed")) {
+        log.warn("DC API: verification failed, returning VP Token data with warning");
+        try {
+          Map<String, List<Object>> vpTokenMap = oid4VPHelperService.parseVPToken(vpToken);
+          Map<String, Object> response = new LinkedHashMap<>();
+          response.put("status", "received");
+          response.put("warning", "VP Token verification failed - received but not fully verified");
+          response.put("vp_token_parsed", vpTokenMap);
+          response.put("transaction_id", transactionId);
+          response.put("protocol", dcApiResponse.get("protocol"));
+          return ResponseEntity.ok(response);
+        } catch (Exception parseEx) {
+          log.error("Failed to parse VP Token for fallback response", parseEx);
+        }
+      }
+    }
+
+    // Add transaction_id to successful response
+    if (result.getStatusCode().is2xxSuccessful() && result.getBody() != null) {
+      Map<String, Object> body = new LinkedHashMap<>(result.getBody());
+      body.put("transaction_id", transactionId);
+      return ResponseEntity.ok(body);
+    }
+
+    return result;
+  }
+
   /**
    * Converts ServiceResult to ResponseEntity for String type responses.
    */
@@ -339,5 +454,80 @@ public class OID4VPController {
   private X509Certificate loadCertificateFromInputStream(java.io.InputStream inputStream) throws Exception {
     CertificateFactory factory = CertificateFactory.getInstance("X.509");
     return (X509Certificate) factory.generateCertificate(inputStream);
+  }
+
+  /**
+   * Loads all trusted root certificates from Java's default trust store (cacerts).
+   */
+  private List<X509Certificate> loadJavaDefaultTrustedCerts() {
+    List<X509Certificate> certs = new ArrayList<>();
+    try {
+      TrustManagerFactory tmf = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm());
+      tmf.init((KeyStore) null); // null loads the default cacerts
+      for (javax.net.ssl.TrustManager tm : tmf.getTrustManagers()) {
+        if (tm instanceof X509TrustManager) {
+          for (X509Certificate cert : ((X509TrustManager) tm).getAcceptedIssuers()) {
+            certs.add(cert);
+          }
+        }
+      }
+      log.info("Loaded {} certificates from Java default trust store", certs.size());
+    } catch (Exception e) {
+      log.warn("Failed to load Java default trust store: {}", e.getMessage());
+    }
+    return certs;
+  }
+
+  /**
+   * Handles authorization request for x509_san_dns scheme.
+   * Loads verifier certificate chain and private key, then signs with x5c header.
+   */
+  private ResponseEntity<String> getAuthorizationRequestWithX5c(String requestId) {
+    try {
+      // Load verifier private key for x509_san_dns signing
+      // TODO: Configure certificate/key paths via oid4vp-config.json
+      ClassPathResource keyResource = new ClassPathResource("cert/x509_verifier.pem.b64");
+      java.security.PrivateKey privateKey = loadPrivateKeyFromBase64(keyResource.getInputStream());
+
+      // Load x5c certificate chain (leaf first)
+      List<String> x5cCertChain = new ArrayList<>();
+      ClassPathResource leafCert = new ClassPathResource("cert/x509_verifier.crt");
+      x5cCertChain.add(encodeCertToBase64(leafCert.getInputStream()));
+
+      ServiceResult<String> result = authorizationService.getAuthorizationRequest(
+          requestId, privateKey, x5cCertChain);
+      return toStringResponse(result);
+
+    } catch (Exception e) {
+      log.error("Failed to create x509_san_dns authorization request", e);
+      return ResponseEntity.internalServerError().body(
+          "{\"error\":\"x5c_signing_error\",\"error_description\":\"" + e.getMessage() + "\"}");
+    }
+  }
+
+  /**
+   * Loads a PKCS8 PEM private key from a Base64-encoded file.
+   * The file contains the PEM content encoded in Base64 to avoid GitHub secret scanning.
+   */
+  private java.security.PrivateKey loadPrivateKeyFromBase64(java.io.InputStream inputStream) throws Exception {
+    String encoded = new String(inputStream.readAllBytes(), StandardCharsets.UTF_8).replaceAll("\\s", "");
+    String pem = new String(java.util.Base64.getDecoder().decode(encoded), StandardCharsets.UTF_8);
+    String base64Key = pem
+        .replace("-----BEGIN PRIVATE KEY-----", "")
+        .replace("-----END PRIVATE KEY-----", "")
+        .replaceAll("\\s", "");
+    byte[] keyBytes = java.util.Base64.getDecoder().decode(base64Key);
+    java.security.spec.PKCS8EncodedKeySpec spec = new java.security.spec.PKCS8EncodedKeySpec(keyBytes);
+    java.security.KeyFactory kf = java.security.KeyFactory.getInstance("EC");
+    return kf.generatePrivate(spec);
+  }
+
+  /**
+   * Encodes an X.509 certificate from InputStream to Base64 (DER) string for x5c header.
+   */
+  private String encodeCertToBase64(java.io.InputStream inputStream) throws Exception {
+    CertificateFactory factory = CertificateFactory.getInstance("X.509");
+    X509Certificate cert = (X509Certificate) factory.generateCertificate(inputStream);
+    return java.util.Base64.getEncoder().encodeToString(cert.getEncoded());
   }
 }

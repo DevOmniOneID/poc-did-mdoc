@@ -19,10 +19,19 @@ package org.omnione.did.sdk.oid4vc.data.dto;
 public class CredentialOfferRequest {
 
     private String userId;
+
+    /**
+     * Constructs a new CredentialOfferRequest with the specified user ID.
+     * @param userId the ID of the user.
+     */
     public CredentialOfferRequest(String userId) {
         this.userId = userId;
     }
 
+    /**
+     * Gets the user ID.
+     * @return the user ID string.
+     */
     public String getUserId() {
         return userId;
     }

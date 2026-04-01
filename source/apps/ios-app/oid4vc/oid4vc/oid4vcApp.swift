@@ -1,5 +1,5 @@
 /*
- * Copyright 2025 OmniOne.
+ * Copyright 2025 - 2026 OmniOne.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,10 +16,12 @@
 
 import SwiftUI
 
+/// The main application structure for the OID4VC app.
 @main
 struct oid4vcApp: App {
     @StateObject private var navigationManager = NavigationManager()
 
+    /// The user interface body of the application.
     var body: some Scene {
         WindowGroup {
             ContentView()

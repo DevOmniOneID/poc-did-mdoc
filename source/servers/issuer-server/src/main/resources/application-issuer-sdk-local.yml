@@ -1,11 +1,15 @@
 # 로컬 개발 환경용 설정 (IDE)
 issuer:
-  server-ip: photospheric-nondyspeptically-donny.ngrok-free.dev
+#  server-ip: photospheric-nondyspeptically-donny.ngrok-free.dev
+  server-ip: 10.48.17.124
   server-port: 8082
-  base-url: https://${issuer.server-ip}
+  base-url: http://${issuer.server-ip}:${issuer.server-port}
   data-dir: .
-  metadata-file-path: metadata/issuer_meta_univ_ngrok.json
-  root-ca-file-name: rootCA.crt
+  metadata-file-path: metadata/issuer_meta_univ_local.json
+  root-ca-file-name: cert/rootCA.crt
+  issuer-cert-file-name: cert/issuer.crt
+  intermediate-cert-file-name: cert/intermediate.crt
+  holder-cert-file-name: cert/holder.crt
   wallet-file-name: forten.wallet
   sdk:
     credential-configurations:
@@ -17,10 +21,17 @@ issuer:
       VerifiableIdSD:
         format: dc+sd-jwt
         identifiers:
-          - PID
-          - NationalIDCert
           - NationalID
+          - PID
+      VerifiableIdSDCert:
+        format: dc+sd-jwt-did
+        identifiers:
+          - NationalIDWithDID
+      mDoc:
+        format: mso-mdoc
+        identifiers:
           - mDL
+          - mDocPID
 
 clients:
   auth-server:
