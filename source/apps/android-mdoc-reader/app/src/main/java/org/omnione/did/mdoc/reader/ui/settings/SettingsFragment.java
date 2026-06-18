@@ -30,6 +30,7 @@ import org.omnione.did.mdoc.reader.R;
 import org.omnione.did.mdoc.reader.di.DependencyProvider;
 import org.omnione.did.mdoc.reader.settings.PreferencesManager;
 import org.omnione.did.mdoc.reader.databinding.FragmentSettingsBinding;
+import org.omnione.did.sdk.mdoc.proximity.reader.utility.ProtocolLogger;
 
 public class SettingsFragment extends Fragment {
     private FragmentSettingsBinding binding;
@@ -71,6 +72,29 @@ public class SettingsFragment extends Fragment {
             prefs.toggleBoolean(PreferencesManager.KEY_BLE_PERIPHERAL_SERVER);
             refreshSettings();
         });
+        binding.switchCaptureIssuerAuth.setOnClickListener(v -> {
+            prefs.toggleBoolean(PreferencesManager.KEY_CAPTURE_ISSUER_AUTH);
+            ProtocolLogger.setCaptureMode(prefs.isCaptureIssuerAuth());
+            refreshSettings();
+        });
+        binding.btnTrustRefresh.setOnClickListener(v -> new Thread(() -> {
+            String listUrl = deps().configProvider().getTrustedIssuerListUrl();
+            String gwUrl = deps().configProvider().getDidDocGatewayUrl();
+            int n = 0;
+            if (listUrl != null && gwUrl != null) {
+                n = new org.omnione.did.mdoc.reader.trust.TrustListRefresher(
+                    new org.omnione.did.mdoc.reader.trust.IssuerListClient(listUrl),
+                    new org.omnione.did.mdoc.reader.trust.DidDocClient(gwUrl),
+                    org.omnione.did.mdoc.reader.MdocReaderApplication.getTrustedIssuerStore()).refresh();
+            }
+            final int count = n;
+            requireActivity().runOnUiThread(() -> {
+                android.widget.Toast.makeText(
+                    requireContext(), getString(R.string.settings_trust_refresh_done, count),
+                    android.widget.Toast.LENGTH_SHORT).show();
+                refreshSettings();
+            });
+        }, "trust-refresh-manual").start());
     }
 
     private void refreshSettings() {
@@ -85,6 +109,20 @@ public class SettingsFragment extends Fragment {
         boolean blePeripheral = prefs.isBlePeripheralServer();
         binding.switchBlePeripheral.setChecked(blePeripheral);
         binding.tvBlePeripheralDesc.setText(blePeripheral ? R.string.settings_ble_peripheral_on : R.string.settings_ble_peripheral_off);
+
+        boolean captureIssuerAuth = prefs.isCaptureIssuerAuth();
+        binding.switchCaptureIssuerAuth.setChecked(captureIssuerAuth);
+        binding.tvCaptureIssuerAuthDesc.setText(captureIssuerAuth ? R.string.settings_capture_issuer_auth_on : R.string.settings_capture_issuer_auth_off);
+
+        java.util.Set<String> cached =
+            org.omnione.did.mdoc.reader.MdocReaderApplication.getTrustedIssuerStore().trustedIssuerDids();
+        if (cached.isEmpty()) {
+            binding.tvTrustedIssuersStatus.setText(R.string.settings_trust_cached_empty);
+        } else {
+            binding.tvTrustedIssuersStatus.setText(
+                getString(R.string.settings_trust_cached_list, cached.size(),
+                    android.text.TextUtils.join("\n", cached)));
+        }
     }
 
     @Override

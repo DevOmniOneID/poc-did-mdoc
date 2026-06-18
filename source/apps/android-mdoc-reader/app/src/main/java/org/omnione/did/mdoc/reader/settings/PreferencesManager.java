@@ -26,6 +26,7 @@ public class PreferencesManager {
     public static final String KEY_RETAIN_DATA = "retain_data";
     public static final String KEY_BLE_PERIPHERAL_SERVER = "ble_peripheral_server";
     public static final String KEY_SKIP_ISSUER_TRUST = "skip_issuer_trust";
+    public static final String KEY_CAPTURE_ISSUER_AUTH = "capture_issuer_auth";
 
     // Document selection related keys
     private static final String KEY_SELECTED_MODES = "selected_modes";
@@ -54,6 +55,7 @@ public class PreferencesManager {
     public boolean isRetainData() { return getBoolean(KEY_RETAIN_DATA, false); }
     public boolean isBlePeripheralServer() { return getBoolean(KEY_BLE_PERIPHERAL_SERVER, false); }
     public boolean isSkipIssuerTrust() { return getBoolean(KEY_SKIP_ISSUER_TRUST, false); }
+    public boolean isCaptureIssuerAuth() { return getBoolean(KEY_CAPTURE_ISSUER_AUTH, false); }
 
     // Document selection persistence
 

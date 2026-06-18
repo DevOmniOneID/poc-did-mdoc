@@ -5,6 +5,15 @@ spring:
   profiles:
     active: file
 
+# DID-native mDoc verification (Verifier / online OID4VP)
+did:
+  resolver:
+    enabled-methods: ["did:omn"]      # PoC: did:omn only. Add did:key/did:web later.
+    cache-ttl-millis: 86400000        # 24h
+    # LSS DID Document endpoint base URL (GET /lss/api/v1/did-doc?did={url-encoded-did}). Direct, no gateway.
+    endpoint: ${DID_RESOLVER_ENDPOINT:http://localhost:8098}
+
 logging:
   level:
     org.omnione.did.oid4vc.dcql: DEBUG
+    com.example.did.oid4vc.verifier.did: DEBUG

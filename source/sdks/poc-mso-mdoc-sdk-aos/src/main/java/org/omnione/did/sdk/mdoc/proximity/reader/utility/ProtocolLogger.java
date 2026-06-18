@@ -1,6 +1,9 @@
 package org.omnione.did.sdk.mdoc.proximity.reader.utility;
 
+import android.util.Base64;
 import android.util.Log;
+
+import com.upokecenter.cbor.CBORObject;
 
 import java.security.interfaces.ECPublicKey;
 import java.security.spec.ECPoint;
@@ -14,9 +17,20 @@ import java.util.UUID;
 public class ProtocolLogger {
     private static final String TAG = "MDR/Protocol";
     private static boolean enabled = true;
+    private static boolean captureMode = false;
 
     public static void setEnabled(boolean enable) {
         enabled = enable;
+    }
+
+    // IssuerAuth 픽스처 캡쳐 모드. true 면 logIssuerAuthDump 가 base64/diagnostic 출력.
+    // Step 0 vp_token 픽스처를 logcat 에서 뽑기 위한 일회성 캡쳐용.
+    public static void setCaptureMode(boolean enable) {
+        captureMode = enable;
+    }
+
+    public static boolean isCaptureMode() {
+        return captureMode;
     }
 
 
@@ -309,6 +323,29 @@ public class ProtocolLogger {
         log("    payload (MSO): " + payload.length + " bytes");
         log("    payload hex: " + toHex(payload));
         log("    signature: " + toHex(signature));
+    }
+
+    // IssuerAuth 픽스처 캡쳐 — Step 0 vp_token 픽스처 입력용.
+    // setCaptureMode(true) 일 때만 base64 로 직렬화된 coseSign1 한 줄 + CBOR diagnostic 헤더 출력.
+    // logcat 에서 한 줄 잡아 `base64 -d > fixture.cbor` 면 그대로 통합 테스트 픽스처가 됨.
+    public static void logIssuerAuthDump(byte[] coseSign1Bytes,
+                                         byte[] protectedHeaderBytes,
+                                         CBORObject unprotectedHeader) {
+        if (!enabled || !captureMode) return;
+        log("══════════════════════════════════════════════════════════════");
+        log("IssuerAuth CAPTURE (Step 0 fixture)");
+        log("══════════════════════════════════════════════════════════════");
+        log("  coseSign1 base64: " + Base64.encodeToString(coseSign1Bytes, Base64.NO_WRAP));
+        try {
+            CBORObject ph = CBORObject.DecodeFromBytes(protectedHeaderBytes);
+            log("  protected header (CBOR diagnostic): " + ph.toString());
+        } catch (Exception e) {
+            log("  protected header decode failed: " + e.getMessage());
+        }
+        if (unprotectedHeader != null) {
+            log("  unprotected header (CBOR diagnostic): " + unprotectedHeader.toString());
+        }
+        log("══════════════════════════════════════════════════════════════");
     }
 
     // MSO validityInfo 로깅

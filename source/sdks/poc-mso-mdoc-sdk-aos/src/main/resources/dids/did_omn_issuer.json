@@ -1,0 +1,53 @@
+{
+  "@context": [
+    "https://www.w3.org/ns/did/v1"
+  ],
+  "assertionMethod": [
+    "assert"
+  ],
+  "authentication": [
+    "auth"
+  ],
+  "capabilityInvocation": [
+    "invoke"
+  ],
+  "controller": "did:omn:issuer",
+  "created": "2025-10-29T06:10:21Z",
+  "deactivated": false,
+  "id": "did:omn:issuer",
+  "keyAgreement": [
+    "keyagree"
+  ],
+  "updated": "2025-10-29T06:10:21Z",
+  "verificationMethod": [
+    {
+      "authType": 1,
+      "controller": "did:omn:issuer",
+      "id": "auth",
+      "publicKeyMultibase": "z26Q9JLTtf1mpLnCbisLBFuAbQ5S6DEmFcccB31gNYpjWn",
+      "type": "Secp256r1VerificationKey2018"
+    },
+    {
+      "authType": 1,
+      "controller": "did:omn:issuer",
+      "id": "assert",
+      "publicKeyMultibase": "zuCXMwn3NUCjmw5gBXqcYWav2tQnESw9EQKjuP5MeeQdy",
+      "type": "Secp256r1VerificationKey2018"
+    },
+    {
+      "authType": 1,
+      "controller": "did:omn:issuer",
+      "id": "keyagree",
+      "publicKeyMultibase": "zekPQ4gD76thaqUfWVPJRT3MLwsLVWCFNViBakQRMpR9u",
+      "type": "Secp256r1VerificationKey2018"
+    },
+    {
+      "authType": 1,
+      "controller": "did:omn:issuer",
+      "id": "invoke",
+      "publicKeyMultibase": "zrEfzPTRQQPwfVc2DACRxLnSxNhAYZ7uompBpdrPr82rz",
+      "type": "Secp256r1VerificationKey2018"
+    }
+  ],
+  "versionId": "1"
+}

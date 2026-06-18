@@ -128,6 +128,8 @@ public class TransferStatusFragment extends Fragment {
 
         List<String> certs = configProvider.getCertificates();
         transferController.initializeVerifier(certs, preferencesManager.isSkipIssuerTrust(), true);
+        transferController.setTrustList(
+            org.omnione.did.mdoc.reader.MdocReaderApplication.getTrustedIssuerStore());
 
         // Parse DeviceEngagement first to determine supported transfer methods
         TransportConfig config;

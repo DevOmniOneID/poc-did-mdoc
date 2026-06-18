@@ -23,6 +23,7 @@ MSO mDoc SDK API
 | 버전   | 일자       | 변경 내용                 |
 | ------ | ---------- | -------------------------|
 | v1.0.0 | 2026-03-31 | 초기 작성                 |
+| v1.1.0 | 2026-06-17 | DID-native 신뢰 경로 추가 (setTrustList, setSupplier, TrustListProvider, IssuerDidDocSupplier) |
 
 <div style="page-break-after: always;"></div>
 
@@ -31,15 +32,19 @@ MSO mDoc SDK API
 - [1. Reader APIs](#1-reader-apis)
     - [1.1 TransferController](#11-transfercontroller)
         - [1.1.1 initializeVerifier](#111-initializeverifier)
-        - [1.1.2 initializeTransferManager](#112-initializetransfermanager)
-        - [1.1.3 startEngagement](#113-startengagement)
-        - [1.1.4 sendRequest](#114-sendrequest)
-        - [1.1.5 stopConnection](#115-stopconnection)
+        - [1.1.2 setTrustList](#112-settrustlist)
+        - [1.1.3 initializeTransferManager](#113-initializetransfermanager)
+        - [1.1.4 startEngagement](#114-startengagement)
+        - [1.1.5 sendRequest](#115-sendrequest)
+        - [1.1.6 stopConnection](#116-stopconnection)
     - [1.2 DeviceEngagement](#12-deviceengagement)
         - [1.2.1 fromQrCode](#121-fromqrcode)
         - [1.2.2 fromBytes](#122-frombytes)
     - [1.3 TrustManager](#13-trustmanager)
         - [1.3.1 isDocumentTrusted](#131-isdocumenttrusted)
+    - [1.4 DID 신뢰 (DID-Native Trust)](#14-did-신뢰-did-native-trust)
+        - [1.4.1 setSupplier (DidIssuerKeyResolver)](#141-setsupplier-didissuerkeyresolver)
+        - [1.4.2 setTrustList (TransferController)](#142-settrustlist-transfercontroller)
 - [2. Holder APIs](#2-holder-apis)
     - [2.1 MdocSessionManager](#21-mdocsessionmanager)
         - [2.1.1 decryptSessionEstablishment](#211-decryptsessionestablishment)
@@ -118,7 +123,38 @@ controller.initializeVerifier(certs, false, true);
 
 <br>
 
-### 1.1.2 initializeTransferManager
+### 1.1.2 setTrustList
+
+### Class Name
+`TransferController`
+
+### Function Name
+`setTrustList`
+
+### Function Introduction
+`DID-native 신뢰 판정에 사용할 신뢰 발급자 목록 공급자를 등록합니다. initializeVerifier() 호출 후 또는 호출 전에 설정할 수 있습니다.`
+
+### Input Parameters
+
+| Parameter | Type | Description | **M/O** | **비고** |
+|-----------|------|-------------|---------|---------|
+| provider | TrustListProvider | 신뢰 발급자 DID 목록 공급자 | M | null 전달 시 기본 빈 목록으로 초기화 |
+
+### Function Declaration
+
+```java
+void setTrustList(TrustListProvider provider)
+```
+
+### Function Usage
+```java
+TrustedIssuerStore store = new TrustedIssuerStore(context);
+controller.setTrustList(store);
+```
+
+<br>
+
+### 1.1.3 initializeTransferManager
 
 ### Class Name
 `TransferController`
@@ -158,7 +194,7 @@ controller.initializeTransferManager(
 
 <br>
 
-### 1.1.3 startEngagement
+### 1.1.4 startEngagement
 
 ### Class Name
 `TransferController`
@@ -192,7 +228,7 @@ controller.startEngagement(new EngagementSource.Nfc(engagementBytes));
 
 <br>
 
-### 1.1.4 sendRequest
+### 1.1.5 sendRequest
 
 ### Class Name
 `TransferController`
@@ -236,7 +272,7 @@ controller.sendRequest(List.of(doc), false, status -> {
 
 <br>
 
-### 1.1.5 stopConnection
+### 1.1.6 stopConnection
 
 ### Class Name
 `TransferController`
@@ -330,7 +366,7 @@ static DeviceEngagement fromBytes(byte[] data) throws Exception
 `isDocumentTrusted`
 
 ### Function Introduction
-`수신한 문서의 Issuer 인증서가 신뢰 루트 인증서로 체이닝되는지 PKIX로 검증합니다.`
+`수신한 문서의 Issuer 신뢰를 검증합니다. DID-native 경로(kid + 서명 검증 + allowlist 멤버십)를 먼저 시도하고, 해당하지 않으면 X.509 PKIX 인증서 체인 검증으로 폴백합니다.`
 
 ### Input Parameters
 
@@ -349,6 +385,70 @@ static DeviceEngagement fromBytes(byte[] data) throws Exception
 ```java
 boolean isDocumentTrusted(DeviceResponseParser.ParsedDocument document)
 ```
+
+<br>
+
+## 1.4 DID 신뢰 (DID-Native Trust)
+
+DID-native 신뢰 경로는 IssuerAuth의 COSE 비보호 헤더에 `kid`(DID URL)가 있고 x5chain이 없을 때 동작합니다.
+검증 흐름: `kid` 추출 → 신뢰 발급자 캐시에서 DID Document 조회 → 공개키 추출 → COSE_Sign1 서명 검증 → allowlist 멤버십 확인.
+
+### 1.4.1 setSupplier (DidIssuerKeyResolver)
+
+### Class Name
+`DidIssuerKeyResolver`
+
+### Function Name
+`setSupplier`
+
+### Function Introduction
+`DID Document 조회를 위한 앱 공급자를 등록합니다. null 전달 시 SDK 번들 DID Document로 폴백합니다.`
+
+### Input Parameters
+
+| Parameter | Type | Description | **M/O** | **비고** |
+|-----------|------|-------------|---------|---------|
+| supplier | IssuerDidDocSupplier | baseDid → DID Document JSON 공급자 | M | null 시 번들 폴백 |
+
+### Function Declaration
+
+```java
+static void setSupplier(IssuerDidDocSupplier supplier)
+```
+
+### Function Usage
+```java
+TrustedIssuerStore store = new TrustedIssuerStore(context);
+DidIssuerKeyResolver.setSupplier(store);
+```
+
+<br>
+
+### 1.4.2 setTrustList (TransferController)
+
+[1.1.2 setTrustList](#112-settrustlist) 참조.
+
+<br>
+
+### 인터페이스
+
+**IssuerDidDocSupplier**
+```java
+public interface IssuerDidDocSupplier {
+    /** baseDid(e.g. "did:omn:issuer")에 해당하는 DID Document JSON을 반환합니다. 없으면 null. */
+    String didDocJsonFor(String baseDid);
+}
+```
+
+**TrustListProvider**
+```java
+public interface TrustListProvider {
+    /** 신뢰하는 발급자 baseDid Set을 반환합니다. */
+    Set<String> trustedIssuerDids();
+}
+```
+
+> `TrustedIssuerStore` (Reader 앱)는 두 인터페이스를 모두 구현하며, `trusted_issuers.json` 배열을 디스크 캐시로 사용합니다.
 
 <br>
 

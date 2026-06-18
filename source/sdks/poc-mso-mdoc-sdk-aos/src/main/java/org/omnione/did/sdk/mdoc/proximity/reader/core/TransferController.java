@@ -31,6 +31,16 @@ public class TransferController {
     private ExecutorService executor;
     private volatile boolean requestSent = false;
 
+    private org.omnione.did.sdk.mdoc.proximity.reader.did.TrustListProvider pendingTrustList;
+
+    /** Registers the allowlist; applied to the TrustManager on (re)initializeVerifier. */
+    public void setTrustList(org.omnione.did.sdk.mdoc.proximity.reader.did.TrustListProvider p) {
+        this.pendingTrustList = p;
+        if (trustManager != null) {
+            trustManager.setTrustList(p);
+        }
+    }
+
     public TransferController(Context context) {
         this.context = context;
     }
@@ -43,6 +53,9 @@ public class TransferController {
         this.skipIssuerTrust = skipIssuerTrust;
         List<X509Certificate> x509Certs = TrustManager.loadCertificatesFromPem(certificates);
         trustManager = new TrustManager(x509Certs, includeSystemRoots);
+        if (pendingTrustList != null) {
+            trustManager.setTrustList(pendingTrustList);
+        }
     }
 
     public void initializeTransferManager(TransportConfig config) {

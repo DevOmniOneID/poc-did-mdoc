@@ -41,4 +41,23 @@ public class ConfigProvider {
     public List<String> getCertificates() {
         return CertificateLoader.loadCertificates(context);
     }
+
+    private java.util.Map<String, Object> readerConfig() {
+        try (java.io.InputStream in = context.getAssets().open("reader_config.yml")) {
+            return new org.yaml.snakeyaml.Yaml().load(in);
+        } catch (Exception e) {
+            android.util.Log.w("ConfigProvider", "reader_config.yml load failed", e);
+            return java.util.Collections.emptyMap();
+        }
+    }
+
+    public String getTrustedIssuerListUrl() {
+        Object v = readerConfig().get("trustedIssuerListUrl");
+        return v != null ? v.toString() : null;
+    }
+
+    public String getDidDocGatewayUrl() {
+        Object v = readerConfig().get("didDocGatewayUrl");
+        return v != null ? v.toString() : null;
+    }
 }

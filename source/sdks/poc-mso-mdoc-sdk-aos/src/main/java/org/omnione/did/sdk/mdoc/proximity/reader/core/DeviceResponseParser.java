@@ -4,6 +4,7 @@ import android.util.Base64;
 import android.util.Log;
 import com.upokecenter.cbor.CBORObject;
 import com.upokecenter.cbor.CBORType;
+import org.omnione.did.sdk.mdoc.proximity.reader.did.DidIssuerKeyResolver;
 import org.omnione.did.sdk.mdoc.proximity.reader.utility.ProtocolLogger;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
@@ -379,6 +380,12 @@ public class DeviceResponseParser {
 
             ProtocolLogger.logIssuerAuth(protectedHeaderBytes, payload, signature != null ? signature : new byte[0]);
 
+            // Step 0 픽스처 캡쳐: ProtocolLogger.setCaptureMode(true) 일 때만 logcat 에 base64+diagnostic 출력
+            ProtocolLogger.logIssuerAuthDump(
+                coseSign1.EncodeToBytes(),
+                protectedHeaderBytes,
+                coseSign1.size() > 1 ? coseSign1.get(1) : null);
+
             // payload에서 MSO 파싱
             CBORObject mso = decodeMsoFromPayload(payload);
             if (mso == null) return null;
@@ -454,7 +461,11 @@ public class DeviceResponseParser {
             }
 
             if (signingKey == null) {
-                Log.w(TAG, "No signing key found in issuerAuth unprotected headers");
+                // x5chain 없음 (DID-native mDoc) → kid(DID)로 발급자 공개키 해석
+                signingKey = DidIssuerKeyResolver.resolve(coseSign1).orElse(null);
+            }
+            if (signingKey == null) {
+                Log.w(TAG, "No signing key found (x5chain absent, DID resolve failed)");
                 return false;
             }
 

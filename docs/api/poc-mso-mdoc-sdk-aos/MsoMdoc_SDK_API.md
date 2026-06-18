@@ -23,6 +23,7 @@ MSO mDoc SDK API
 | Version | Date       | Changes         |
 | ------- | ---------- | --------------- |
 | v1.0.0  | 2026-03-31 | Initial version |
+| v1.1.0  | 2026-06-17 | Add DID-native trust path (setTrustList, setSupplier, TrustListProvider, IssuerDidDocSupplier) |
 
 <div style="page-break-after: always;"></div>
 
@@ -31,15 +32,19 @@ MSO mDoc SDK API
 - [1. Reader APIs](#1-reader-apis)
     - [1.1 TransferController](#11-transfercontroller)
         - [1.1.1 initializeVerifier](#111-initializeverifier)
-        - [1.1.2 initializeTransferManager](#112-initializetransfermanager)
-        - [1.1.3 startEngagement](#113-startengagement)
-        - [1.1.4 sendRequest](#114-sendrequest)
-        - [1.1.5 stopConnection](#115-stopconnection)
+        - [1.1.2 setTrustList](#112-settrustlist)
+        - [1.1.3 initializeTransferManager](#113-initializetransfermanager)
+        - [1.1.4 startEngagement](#114-startengagement)
+        - [1.1.5 sendRequest](#115-sendrequest)
+        - [1.1.6 stopConnection](#116-stopconnection)
     - [1.2 DeviceEngagement](#12-deviceengagement)
         - [1.2.1 fromQrCode](#121-fromqrcode)
         - [1.2.2 fromBytes](#122-frombytes)
     - [1.3 TrustManager](#13-trustmanager)
         - [1.3.1 isDocumentTrusted](#131-isdocumenttrusted)
+    - [1.4 DID-Native Trust](#14-did-native-trust)
+        - [1.4.1 setSupplier (DidIssuerKeyResolver)](#141-setsupplier-didissuerkeyresolver)
+        - [1.4.2 setTrustList (TransferController)](#142-settrustlist-transfercontroller)
 - [2. Holder APIs](#2-holder-apis)
     - [2.1 MdocSessionManager](#21-mdocsessionmanager)
         - [2.1.1 decryptSessionEstablishment](#211-decryptsessionestablishment)
@@ -118,7 +123,38 @@ controller.initializeVerifier(certs, false, true);
 
 <br>
 
-### 1.1.2 initializeTransferManager
+### 1.1.2 setTrustList
+
+### Class Name
+`TransferController`
+
+### Function Name
+`setTrustList`
+
+### Function Introduction
+`Registers the trusted-issuer list provider used for DID-native trust evaluation. Can be called before or after initializeVerifier().`
+
+### Input Parameters
+
+| Parameter | Type | Description | **M/O** | **Note** |
+|-----------|------|-------------|---------|----------|
+| provider | TrustListProvider | Trusted issuer DID list provider | M | Pass null to reset to default empty list |
+
+### Function Declaration
+
+```java
+void setTrustList(TrustListProvider provider)
+```
+
+### Function Usage
+```java
+TrustedIssuerStore store = new TrustedIssuerStore(context);
+controller.setTrustList(store);
+```
+
+<br>
+
+### 1.1.3 initializeTransferManager
 
 ### Class Name
 `TransferController`
@@ -158,7 +194,7 @@ controller.initializeTransferManager(
 
 <br>
 
-### 1.1.3 startEngagement
+### 1.1.4 startEngagement
 
 ### Class Name
 `TransferController`
@@ -192,7 +228,7 @@ controller.startEngagement(new EngagementSource.Nfc(engagementBytes));
 
 <br>
 
-### 1.1.4 sendRequest
+### 1.1.5 sendRequest
 
 ### Class Name
 `TransferController`
@@ -236,7 +272,7 @@ controller.sendRequest(List.of(doc), false, status -> {
 
 <br>
 
-### 1.1.5 stopConnection
+### 1.1.6 stopConnection
 
 ### Class Name
 `TransferController`
@@ -330,7 +366,7 @@ static DeviceEngagement fromBytes(byte[] data) throws Exception
 `isDocumentTrusted`
 
 ### Function Introduction
-`Verifies whether the issuer certificate of the received document chains to a trusted root certificate using PKIX.`
+`Evaluates whether the received document's issuer is trusted. Tries the DID-native path first (kid present + signature valid + allowlist membership), then falls back to X.509 PKIX certificate chain validation.`
 
 ### Input Parameters
 
@@ -349,6 +385,69 @@ static DeviceEngagement fromBytes(byte[] data) throws Exception
 ```java
 boolean isDocumentTrusted(DeviceResponseParser.ParsedDocument document)
 ```
+
+<br>
+
+## 1.4 DID-Native Trust
+
+The DID-native trust path activates when the IssuerAuth COSE unprotected header contains a `kid` (DID URL) and no `x5chain`. Verification flow: extract `kid` → look up DID Document in trusted-issuer cache → extract public key → verify COSE_Sign1 signature → check allowlist membership.
+
+### 1.4.1 setSupplier (DidIssuerKeyResolver)
+
+### Class Name
+`DidIssuerKeyResolver`
+
+### Function Name
+`setSupplier`
+
+### Function Introduction
+`Registers the app-supplied DID Document provider. Pass null to fall back to the SDK-bundled DID Document.`
+
+### Input Parameters
+
+| Parameter | Type | Description | **M/O** | **Note** |
+|-----------|------|-------------|---------|----------|
+| supplier | IssuerDidDocSupplier | baseDid → DID Document JSON provider | M | null reverts to bundled fallback |
+
+### Function Declaration
+
+```java
+static void setSupplier(IssuerDidDocSupplier supplier)
+```
+
+### Function Usage
+```java
+TrustedIssuerStore store = new TrustedIssuerStore(context);
+DidIssuerKeyResolver.setSupplier(store);
+```
+
+<br>
+
+### 1.4.2 setTrustList (TransferController)
+
+See [1.1.2 setTrustList](#112-settrustlist).
+
+<br>
+
+### Interfaces
+
+**IssuerDidDocSupplier**
+```java
+public interface IssuerDidDocSupplier {
+    /** Returns the DID Document JSON for the given baseDid (e.g. "did:omn:issuer"), or null if not cached. */
+    String didDocJsonFor(String baseDid);
+}
+```
+
+**TrustListProvider**
+```java
+public interface TrustListProvider {
+    /** Returns the set of trusted issuer base DIDs. */
+    Set<String> trustedIssuerDids();
+}
+```
+
+> `TrustedIssuerStore` (Reader app) implements both interfaces, using `trusted_issuers.json` as a disk-backed array cache.
 
 <br>
 

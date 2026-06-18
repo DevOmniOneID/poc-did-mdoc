@@ -1,0 +1,4 @@
+# 신뢰 발급자 did 목록을 주는 mock 서버
+trustedIssuerListUrl: "http://10.0.2.2:9090/trusted-issuers"
+# did → did-doc 을 주는 API-gateway (base URL)
+didDocGatewayUrl: "http://10.0.2.2:8093"

@@ -168,6 +168,69 @@ Reader 앱은 `app/src/main/assets/certs/` 디렉토리에 포함된 Root CA 인
 
 > 커스텀 Issuer를 사용하는 경우, 해당 Issuer의 Root CA 인증서를 이 디렉토리에 추가해야 합니다.
 
+#### 3.1.5. DID 신뢰 발급자 설정
+
+Reader 앱은 X.509 인증서 체인 검증 외에 **DID 기반 신뢰 발급자 캐시**를 지원합니다. 앱 시작 시 백그라운드에서 자동으로 캐시를 최신화하며, Settings 화면의 버튼으로 수동 최신화도 가능합니다.
+
+**구성 개요** — 이 캐시는 역할이 분리된 **두 출처**가 협력합니다.
+
+| 출처 | 제공하는 것 | 의미 | 비고 |
+|------|------------|------|------|
+| **mock 서버** (PoC용, 직접 구동) | 신뢰 발급자 **DID 목록** | "누구를 신뢰하는가" | 실제 운영에선 서명된 신뢰목록 관리자로 대체 |
+| **API-gateway** (기존 발급 인프라) | DID **Document**(공개키) | "그 발급자의 키" | 실제 인프라 그대로 사용 |
+
+```
+mock 서버 ──(신뢰 DID 목록)──▶ Reader 앱
+                                   │  목록의 각 DID에 대해
+                                   ▼
+API-gateway ──(DID Document=키)──▶ Reader 앱 ──▶ trusted_issuers.json (로컬 캐시)
+```
+
+즉 **mock 서버는 "신뢰 목록"만** 주고, 실제 키(DID Document)는 **API-gateway**에서 받아 하나의 로컬 캐시로 합칩니다. "캐시에 그 DID Document가 있다 = 신뢰 목록에 있다 + 키도 있다"가 되어, BLE/NFC 오프라인 상태에서도 발급자 서명을 검증할 수 있습니다.
+
+##### 3.1.5.1. reader_config.yml 설정
+
+`app/src/main/assets/reader_config.yml` 파일에서 아래 두 URL을 실제 환경에 맞게 수정합니다.
+
+```yaml
+# 신뢰 발급자 DID 목록을 제공하는 mock 서버 URL
+trustedIssuerListUrl: "http://<서버_IP>:9090/trusted-issuers"
+# DID Document를 조회하는 API-gateway base URL
+didDocGatewayUrl: "http://<서버_IP>:8098"
+```
+
+> **에뮬레이터 사용 시**: 호스트 PC에서 서버를 구동하는 경우 IP 대신 `10.0.2.2`를 사용합니다.
+> ```yaml
+> trustedIssuerListUrl: "http://10.0.2.2:9090/trusted-issuers"
+> didDocGatewayUrl: "http://10.0.2.2:8098"
+> ```
+
+##### 3.1.5.2. Mock 신뢰 발급자 목록 서버 구동
+
+`source/apps/android-mdoc-reader/tools/MockIssuerListServer.java`는 신뢰 DID 목록을 제공하는 간단한 HTTP 서버입니다. JDK 21만 있으면 빌드 없이 바로 실행할 수 있습니다.
+
+```bash
+cd source/apps/android-mdoc-reader/tools
+java MockIssuerListServer.java
+# 출력: Mock trusted-issuer list server: http://0.0.0.0:9090/trusted-issuers
+```
+
+신뢰 발급자 DID를 추가하려면 `MockIssuerListServer.java` 상단의 `DIDS` 배열을 수정합니다.
+
+```java
+private static final String[] DIDS = {"did:omn:issuer", "did:omn:issuer2"};
+```
+
+##### 3.1.5.3. 신뢰 발급자 캐시 최신화
+
+Reader 앱은 **시작 시 자동으로** 신뢰 발급자 목록을 최신화합니다. 수동으로 최신화하려면:
+
+1. Reader 앱에서 **Settings** 화면으로 이동합니다.
+2. **Refresh Trusted Issuers** 버튼을 누릅니다.
+3. 완료 시 Toast 메시지와 함께 캐시된 발급자 목록이 화면에 표시됩니다.
+
+> **참고**: 이 최신화 과정(DID 목록 수신 → DID Document fetch → 로컬 저장)은 BLE/NFC가 없는 **에뮬레이터에서도 테스트 가능**합니다. 오프라인 BLE 프레젠테이션 자체는 실물 디바이스가 필요합니다.
+
 ### 3.2. iOS
 
 #### 3.2.1. 프로젝트 열기
@@ -302,6 +365,7 @@ QR 스캔(또는 NFC 탭) 후 다음 과정이 자동으로 수행됩니다:
 | 발급자 인증서 검증 실패 | Root CA 인증서 불일치 | Android Reader의 `assets/certs/` 디렉토리에 올바른 Root CA 인증서가 포함되어 있는지 확인합니다. |
 | mDoc 발급 실패 | Issuer Server 미구동 또는 네트워크 연결 불가 | Issuer Server가 구동 중이고 디바이스에서 접근 가능한지 확인합니다. |
 | 에뮬레이터/시뮬레이터에서 오프라인 제출 불가 | BLE/NFC 미지원 | 오프라인 프레젠테이션은 실물 디바이스에서만 테스트 가능합니다. |
+| 신뢰 발급자 캐시 최신화 실패 (Toast에 0 표시) | mock 서버 미구동 또는 네트워크 차단 | mock 서버가 실행 중인지 확인하고 `reader_config.yml`의 URL이 실제 환경과 일치하는지 검토합니다. logcat에서 `MDR/TrustRefresh E` 태그로 상세 오류를 확인할 수 있습니다. |
 
 ### 7.2. Android
 

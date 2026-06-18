@@ -36,6 +36,8 @@ import org.omnione.did.oid4vc.oid4vp.service.InitiationService;
 import org.omnione.did.oid4vc.oid4vp.service.OID4VPHelperService;
 import org.omnione.did.oid4vc.oid4vp.util.jar.jws.CompactSigner;
 import org.omnione.did.oid4vc.formatter.oid4vp.verifier.dto.IdentifierResult;
+import com.example.did.oid4vc.verifier.did.CompositeDidResolver;
+import com.example.did.oid4vc.verifier.did.DidResolution;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.http.HttpServletRequest;
@@ -68,7 +70,7 @@ public class OID4VPController {
   private final AuthorizationService authorizationService;
   private final ObjectMapper objectMapper;
   private final OID4VPHelperService oid4VPHelperService;
-
+  private final CompositeDidResolver compositeDidResolver;
 
   @PostMapping("/initiate")
   @ResponseBody
@@ -435,7 +437,27 @@ public class OID4VPController {
   }
 
   // ==================== Public Key Resolution Methods ====================
+
+  /**
+   * Resolves the issuer public key for an identifier.
+   *
+   * <ul>
+   *   <li>{@code MSO_MDOC_KID}: the value is a DID URL (e.g. {@code did:omn:issuer?versionId=1#assert})
+   *       → resolve via {@link CompositeDidResolver}. This is the DID-native mDoc path; the SDK's
+   *       {@code MDocVPVerifier.validateSignature} verifies the IssuerAuth against the returned key.</li>
+   *   <li>others (e.g. SD-JWT kid): legacy placeholder, preserved to avoid regressing existing flows.</li>
+   * </ul>
+   */
   private String resolvePublicKeyFromIdentifier(IdentifierResult identifier) {
+    if (identifier == null) {
+      return null;
+    }
+    if (identifier.getType() == IdentifierResult.Type.MSO_MDOC_KID) {
+      return compositeDidResolver.resolve(identifier.getValue())
+          .map(DidResolution::publicKeyBase64)
+          .orElse(null);
+    }
+    // LEGACY (pre-existing): SD-JWT kid placeholder. Replace with a resolver when that path is reworked.
     return "Ay/5wNs8D1oX+FDRYgnJUmZ/Ovnff+/73G8LD53+m1tk";
   }
 

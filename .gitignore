@@ -6,3 +6,9 @@
 **/build/
 **/.idea/
 **/.vscode/
+
+# Local env / build output / tooling / scratch context
+**/local.properties
+**/bin/
+**/.claude/
+.context/

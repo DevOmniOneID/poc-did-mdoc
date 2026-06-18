@@ -9,6 +9,10 @@ import com.upokecenter.cbor.CBORType;
 import java.io.ByteArrayInputStream;
 import java.security.KeyStore;
 import java.security.cert.*;
+import org.omnione.did.sdk.mdoc.proximity.reader.did.DidNativeTrust;
+import org.omnione.did.sdk.mdoc.proximity.reader.did.DidTrustEvaluator;
+import org.omnione.did.sdk.mdoc.proximity.reader.did.TrustListProvider;
+import org.omnione.did.sdk.mdoc.proximity.reader.did.StaticTrustListProvider;
 import java.util.*;
 
 import javax.net.ssl.TrustManagerFactory;
@@ -18,6 +22,12 @@ public class TrustManager {
     private static final String TAG = "MDR/Trust";
     private final List<X509Certificate> trustedCertificates;
     private final boolean includeSystemRoots;
+    private TrustListProvider trustListProvider = new StaticTrustListProvider(null);
+
+    /** Registers the trusted-issuer allowlist for the DID-native path. */
+    public void setTrustList(TrustListProvider provider) {
+        this.trustListProvider = provider != null ? provider : new StaticTrustListProvider(null);
+    }
 
     public TrustManager(List<X509Certificate> trustedCertificates) {
         this(trustedCertificates, false);
@@ -38,28 +48,33 @@ public class TrustManager {
         return (X509Certificate) cf.generateCertificate(new ByteArrayInputStream(der));
     }
 
-    // 문서의 발급자 인증서가 신뢰 루트 인증서로 체이닝되는지 검증
-    // 1. COSE_Sign1 unprotected header에서 x5chain 인증서 추출
-    // 2. 인증서 경로 구성
-    // 3. PKIX를 사용하여 신뢰 루트 대비 체인 검증
+    // 문서의 발급자 신뢰 검증
+    // DID-native path: kid로 서명 검증 완료 + x5chain 없음 → 신뢰
+    // X.509 path: unprotected header x5chain → PKIX 체인 검증
     public boolean isDocumentTrusted(DeviceResponseParser.ParsedDocument document) {
         if (document.getIssuerSignedInfo() == null) return false;
         CBORObject coseSign1 = document.getIssuerSignedInfo().getCoseSign1Items();
         if (coseSign1 == null || coseSign1.size() < 4) return false;
+
+        // DID-native: 서명 검증 완료 + x5chain 없음 + allowlist 멤버십
+        if (DidTrustEvaluator.isTrusted(coseSign1,
+                document.getIssuerSignedInfo().isIssuerSignatureValid(),
+                trustListProvider.trustedIssuerDids())) {
+            Log.i(TAG, "DID-native trust: issuer in allowlist & signature verified");
+            return true;
+        }
+
+        // X.509 path: PKIX 체인 검증
         if (trustedCertificates == null || trustedCertificates.isEmpty()) {
             Log.w(TAG, "No trusted certificates configured");
             return false;
         }
-
         try {
-            // 1. unprotected 헤더에서 x5chain 추출
             List<X509Certificate> chain = extractCertChain(coseSign1.get(1));
             if (chain.isEmpty()) {
                 Log.w(TAG, "No x5chain certificate found in issuerAuth");
                 return false;
             }
-
-            // 2. 신뢰 루트 인증서 대비 인증서 체인 검증
             return validateCertChain(chain);
         } catch (Exception e) {
             Log.w(TAG, "Trust validation failed", e);

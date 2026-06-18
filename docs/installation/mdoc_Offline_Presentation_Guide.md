@@ -168,6 +168,69 @@ The Reader app verifies the issuer certificate chain based on Root CA certificat
 
 > If using a custom Issuer, add the corresponding Issuer's Root CA certificate to this directory.
 
+#### 3.1.5. DID Trusted Issuer Setup
+
+The Reader app supports a **DID-based trusted issuer cache** in addition to X.509 certificate chain validation. The cache is refreshed automatically in the background on app start, and can also be refreshed manually via the Settings screen.
+
+**Overview** — the cache is built from **two sources** with separated roles:
+
+| Source | Provides | Meaning | Note |
+|--------|----------|---------|------|
+| **Mock server** (PoC, run by you) | Trusted issuer **DID list** | "Whom do we trust" | Replaced by a signed trust-list manager in production |
+| **API-gateway** (existing issuance infra) | DID **Document** (public key) | "That issuer's key" | Used as-is from real infra |
+
+```
+Mock server ──(trusted DID list)──▶ Reader app
+                                       │  for each DID in the list
+                                       ▼
+API-gateway ──(DID Document = key)──▶ Reader app ──▶ trusted_issuers.json (local cache)
+```
+
+In short, the **mock server provides only the "trust list"**, while the actual keys (DID Documents) come from the **API-gateway**; the two are merged into a single local cache. "A DID Document is in the cache = it is on the trust list AND its key is available", which enables issuer signature verification even offline (BLE/NFC).
+
+##### 3.1.5.1. Configure reader_config.yml
+
+Edit `app/src/main/assets/reader_config.yml` to match your environment:
+
+```yaml
+# Mock server URL providing the trusted issuer DID list
+trustedIssuerListUrl: "http://<SERVER_IP>:9090/trusted-issuers"
+# API-gateway base URL for fetching DID Documents
+didDocGatewayUrl: "http://<SERVER_IP>:8098"
+```
+
+> **Emulator**: When running servers on the host PC, use `10.0.2.2` instead of `localhost`:
+> ```yaml
+> trustedIssuerListUrl: "http://10.0.2.2:9090/trusted-issuers"
+> didDocGatewayUrl: "http://10.0.2.2:8098"
+> ```
+
+##### 3.1.5.2. Start the Mock Trusted Issuer List Server
+
+`source/apps/android-mdoc-reader/tools/MockIssuerListServer.java` is a lightweight HTTP server that serves the trusted DID list. It requires only JDK 21 — no build needed.
+
+```bash
+cd source/apps/android-mdoc-reader/tools
+java MockIssuerListServer.java
+# Output: Mock trusted-issuer list server: http://0.0.0.0:9090/trusted-issuers
+```
+
+To add more trusted issuers, edit the `DIDS` array at the top of `MockIssuerListServer.java`:
+
+```java
+private static final String[] DIDS = {"did:omn:issuer", "did:omn:issuer2"};
+```
+
+##### 3.1.5.3. Refresh the Trusted Issuer Cache
+
+The Reader app **automatically refreshes** the trusted issuer cache on startup. To refresh manually:
+
+1. Open the **Settings** screen in the Reader app.
+2. Tap the **Refresh Trusted Issuers** button.
+3. A Toast notification confirms completion, and the cached issuer list is displayed on screen.
+
+> **Note**: The refresh flow (fetch DID list → fetch DID Documents → save locally) can be tested on an **emulator**. The offline BLE presentation itself requires physical devices.
+
 ### 3.2. iOS
 
 #### 3.2.1. Open Project
@@ -302,6 +365,7 @@ Once the transfer is complete, the Reader app verifies and displays the followin
 | Issuer certificate verification failure | Root CA certificate mismatch | Verify that the correct Root CA certificates are included in the Android Reader's `assets/certs/` directory. |
 | mDoc issuance failure | Issuer Server not running or network unreachable | Verify that the Issuer Server is running and accessible from the device. |
 | Offline presentation unavailable on emulator/simulator | BLE/NFC not supported | Offline presentation can only be tested on physical devices. |
+| Trusted issuer cache refresh fails (Toast shows 0) | Mock server not running or network blocked | Verify the mock server is running and the URLs in `reader_config.yml` match your environment. Check logcat for `MDR/TrustRefresh E` tag for detailed errors. |
 
 ### 7.2. Android
 

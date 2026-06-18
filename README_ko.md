@@ -58,7 +58,7 @@ poc-oid4vc
 | **`source/apps`** | 샘플 모바일 애플리케이션을 포함합니다. |
 | ┖ `android-app` | VC를 저장하고 제출하는 샘플 안드로이드 지갑입니다. |
 | ┖ `ios-app` | VC를 저장하고 제출하는 샘플 iOS 지갑입니다. |
-| ┖ `android-mdoc-reader` | ISO 18013-5 근접 검증을 위한 Android mDoc Reader 앱입니다. |
+| ┖ `android-mdoc-reader` | ISO 18013-5 근접 검증을 위한 Android mDoc Reader 앱입니다. DID-native 신뢰 발급자 캐시(온라인 최신화 지원)를 포함합니다. |
 | ┖ `ios-mdoc-reader` | ISO 18013-5 근접 검증을 위한 iOS mDoc Reader 앱입니다. |
 | **`source/sdks`** | Android 네이티브 SDK를 포함합니다. |
 | ┖ `poc-sd-jwt-vc-sdk-aos` | SD-JWT VC 생성·검증을 위한 Android SDK입니다. |
@@ -185,6 +185,16 @@ sequenceDiagram
 |Additional Features| Transaction Data | ![계획됨](https://img.shields.io/badge/계획됨-📅-blue) |
 |Security| Proof(JWT) | ![지원됨](https://img.shields.io/badge/지원됨-✅-brightgreen) |
 || JWE(JSON Web Encryption) | ![계획됨](https://img.shields.io/badge/계획됨-📅-blue) |
+
+* **ISO 18013-5 Proximity**
+
+| 구분 | 기능 | 상태 |
+|:------|:------|:------|
+|신뢰 검증| X.509 x5chain 인증서 체인 검증 | ![지원됨](https://img.shields.io/badge/지원됨-✅-brightgreen) |
+|| DID-native 신뢰 발급자 검증 | ![지원됨](https://img.shields.io/badge/지원됨-✅-brightgreen) |
+|| DID-native 신뢰 발급자 캐시 온라인 최신화 | ![지원됨](https://img.shields.io/badge/지원됨-✅-brightgreen) |
+|전송| BLE Central/Peripheral | ![지원됨](https://img.shields.io/badge/지원됨-✅-brightgreen) |
+|| NFC | ![지원됨](https://img.shields.io/badge/지원됨-✅-brightgreen) |
 
 ## 시작하기
 

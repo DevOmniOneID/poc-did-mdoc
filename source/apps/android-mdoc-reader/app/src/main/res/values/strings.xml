@@ -37,6 +37,9 @@
     <string name="settings_ble_peripheral">BLE peripheral server mode</string>
     <string name="settings_ble_peripheral_on">BLE peripheral server mode activated</string>
     <string name="settings_ble_peripheral_off">BLE peripheral server mode deactivated</string>
+    <string name="settings_capture_issuer_auth">Capture IssuerAuth for fixture</string>
+    <string name="settings_capture_issuer_auth_on">Dump base64 + CBOR diagnostic to logcat on next exchange</string>
+    <string name="settings_capture_issuer_auth_off">IssuerAuth capture disabled</string>
 
     <!-- Documents To Request -->
     <string name="doc_request_title">Documents to request</string>
@@ -83,4 +86,11 @@
     <!-- Document Modes -->
     <string name="mode_full">Full</string>
     <string name="mode_custom">Custom</string>
+
+    <!-- Trust List Refresh -->
+    <string name="settings_category_trusted_issuers">Trusted Issuers</string>
+    <string name="settings_trust_refresh">Refresh Trusted Issuers</string>
+    <string name="settings_trust_refresh_done">Refresh done: %d issuer(s) cached</string>
+    <string name="settings_trust_cached_empty">No issuers cached yet</string>
+    <string name="settings_trust_cached_list">Cached (%1$d): %2$s</string>
 </resources>

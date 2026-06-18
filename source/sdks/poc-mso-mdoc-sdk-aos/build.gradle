@@ -33,6 +33,12 @@ android {
             excludes += ['META-INF/versions/9/OSGI-INF/MANIFEST.MF']
         }
     }
+
+    testOptions {
+        unitTests {
+            includeAndroidResources = true
+        }
+    }
 }
 
 ext {
@@ -71,8 +77,14 @@ dependencies {
     implementation 'com.fasterxml.jackson.core:jackson-databind:2.15.2'
     implementation 'com.google.code.gson:gson:2.11.0'
 
+    // HTTP (DID resolution)
+    implementation 'com.squareup.okhttp3:okhttp:4.12.0'
+
     // Test
     testImplementation 'junit:junit:4.13.2'
+    // Robolectric — run android.util.* (Base64/Log) in a PC JVM without an emulator
+    testImplementation 'org.robolectric:robolectric:4.11.1'
+    testImplementation 'androidx.test:core:1.5.0'
     androidTestImplementation 'androidx.test.ext:junit:1.1.5'
     androidTestImplementation 'androidx.test.espresso:espresso-core:3.5.1'
 }
