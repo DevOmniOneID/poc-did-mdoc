@@ -16,6 +16,8 @@
 
 package com.example.did.oid4vc.issuer.controller;
 
+import com.nimbusds.jose.shaded.gson.Gson;
+import lombok.extern.slf4j.Slf4j;
 import org.omnione.did.oid4vc.oid4vci.dto.credential.CredentialRequest;
 import org.omnione.did.oid4vc.oid4vci.dto.credential.CredentialResponse;
 import org.omnione.did.oid4vc.oid4vci.dto.credential.DeferredCredentialRequest;
@@ -23,13 +25,10 @@ import org.omnione.did.oid4vc.oid4vci.dto.credential.DeferredIssuanceResponse;
 import org.omnione.did.oid4vc.oid4vci.dto.credentialoffer.CredentialOfferRequest;
 import org.omnione.did.oid4vc.oid4vci.dto.credentialoffer.CredentialOfferResponse;
 import org.omnione.did.oid4vc.oid4vci.dto.credentialoffer.TestCredentialOfferResponse;
-import org.omnione.did.oid4vc.oid4vci.dto.metadata.IssuerMetadataResponse;
 import org.omnione.did.oid4vc.oid4vci.dto.nonce.NonceResponse;
 import org.omnione.did.oid4vc.oid4vci.dto.notification.NotificationRequest;
 import org.omnione.did.oid4vc.oid4vci.exception.OID4VCIException;
 import org.omnione.did.oid4vc.oid4vci.service.CredentialService;
-import com.nimbusds.jose.shaded.gson.Gson;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
@@ -45,12 +44,13 @@ public class CredentialIssuanceController {
         this.credentialService = credentialService;
     }
 
-    public CredentialOfferResponse getCredentialOffer(@PathVariable("request_id") String request_id) throws OID4VCIException {
+    public CredentialOfferResponse getCredentialOffer(@PathVariable("request_id") String request_id,
+                                                      @PathVariable("configuration_id") String configurationId) throws OID4VCIException {
         CredentialOfferRequest request = new CredentialOfferRequest();
         request.setUserId("test");
 
         log.info("Retrieving authorization request for request_id: {}", request_id);
-        CredentialOfferResponse response = credentialService.processCredentialOffer(request_id, request);
+        CredentialOfferResponse response = credentialService.processCredentialOffer(request_id, request, configurationId);
         log.info("createCredentialOffer response : {}", new Gson().toJson(response));
 
         return response;
@@ -85,7 +85,7 @@ public class CredentialIssuanceController {
     @ResponseBody
     public TestCredentialOfferResponse getCredentialOfferForTest() throws OID4VCIException {
         log.info("createCredentialOfferForTest request");
-        TestCredentialOfferResponse testResponse = credentialService.createTestCredentialOffer("test");
+        TestCredentialOfferResponse testResponse = credentialService.createTestCredentialOffer("test", "mdoc");
         log.info("createCredentialOfferForTest response : {}", new Gson().toJson(testResponse));
         return testResponse;
     }
