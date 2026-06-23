@@ -2,12 +2,13 @@
 
 - Subject: OID4VCI Issuer API Document
 - Writer: 김상준
-- Date: 2025-10-23
-- Version: v1.0.0
+- Date: 2026-06-19
+- Version: v1.1.0
 
 | Version | Date | History |
 | --- | --- | --- |
 | v1.0.0 | 2025-10-23 | 초기 작성 |
+| v1.1.0 | 2026-06-19 | OID4VCI 1.0 계약에 맞게 Credential Offer 경로와 Credential Request 예시 수정 |
 
 ## 목차
 
@@ -37,7 +38,7 @@
 
 | API | Method | URL | 설명 |
 | --- | --- | --- | --- |
-| `Credential Offer 생성` | GET | `/credential-offer/{request_id}` | 자격증명 발급 제안(Credential Offer)을 생성하여 반환 |
+| `Credential Offer 생성` | GET | `/credential-offer/{request_id}/{configuration_id}` | 자격증명 구성에 대한 Credential Offer를 생성하여 반환 |
 | `Issuer Metadata 조회` | GET | `/.well-known/openid-credential-issuer` | Issuer의 설정 정보(Metadata)를 조회 |
 | `Access Token 발급` | POST | `/token` | Pre-Authorized Code를 Access Token으로 교환 (인가서버 미사용시) |
 | `Credential 발급` | POST | `/credential` | Access Token을 사용하여 자격증명을 발급 |
@@ -52,18 +53,18 @@
 
 ### 3.1. Credential Offer 생성
 
-- **URL**: `/credential-offer/{request_id}`
+- **URL**: `/credential-offer/{request_id}/{configuration_id}`
 - **Method**: `GET`
-- **설명**: `request_id`에 해당하는 자격증명 발급 제안(Credential Offer) 정보를 반환합니다. `request_id`의 접두사에 따라 `pre-authorized_code` (`p`로 시작) 또는 `authorization_code` (`a`로 시작) 흐름으로 분기됩니다.
+- **설명**: `request_id`와 `configuration_id`에 해당하는 Credential Offer 정보를 반환합니다. `request_id`의 접두사에 따라 `pre-authorized_code` (`p`로 시작) 또는 `authorization_code` (`a`로 시작) 흐름으로 분기됩니다. `configuration_id`는 Issuer Metadata의 `credential_configurations_supported` 키여야 합니다.
 
 #### 요청 예시
 
 ```shell
 # Pre-Authorized Code Flow
-curl -X GET "http://${Host}:8080/credential-offer/pGkurKxf5T0Y-mnPFCHqWOMiZi4VS138cQO_V7PZHAdM"
+curl -X GET "http://${Host}:8080/credential-offer/pGkurKxf5T0Y-mnPFCHqWOMiZi4VS138cQO_V7PZHAdM/UniversityDegree_JWT"
 
 # Authorization Code Flow
-curl -X GET "http://${Host}:8080/credential-offer/aGkurKxf5T0Y-mnPFCHqWOMiZi4VS138cQO_V7PZHAdM"
+curl -X GET "http://${Host}:8080/credential-offer/aGkurKxf5T0Y-mnPFCHqWOMiZi4VS138cQO_V7PZHAdM/UniversityDegree_JWT"
 ```
 
 #### 응답 예시 (Pre-Authorized Code Flow)
@@ -199,11 +200,11 @@ curl -X POST "http://${Host}:8080/token" \
 
 - **URL**: `/credential`
 - **Method**: `POST`
-- **설명**: 발급받은 Access Token을 사용하여 Issuer에게 자격증명(Credential) 발급을 요청합니다. OID4VCI 표준에 따라, 인가 과정에서 `authorization_details`를 사용했는지, `scope`를 사용했는지에 따라 요청 본문의 내용이 달라집니다. 즉시 발급 또는 지연 발급(Deferred) 응답을 받을 수 있습니다.
+- **설명**: Access Token과 Token 응답에서 인가된 `credential_identifier`를 사용하여 Credential 발급을 요청합니다. 즉시 발급 또는 지연 발급 응답을 받을 수 있습니다.
 
-#### 요청 본문 (Case 1: `authorization_details`를 사용한 경우)
+#### 요청 본문
 
-Token 응답에 `authorization_details`가 포함된 경우, 해당 응답의 `credential_identifiers` 값을 사용하여 요청합니다.
+Token 응답의 `credential_identifiers` 중 하나를 사용합니다.
 
 ```json
 {
@@ -211,34 +212,6 @@ Token 응답에 `authorization_details`가 포함된 경우, 해당 응답의 `c
   "proof": {
     "proof_type": "jwt",
     "jwt": "eyJhbGciOiJFUzI1NiIsImtpZCI6ImRpZDpleGF...In0.eyJhdWQiOiJodHRwczovL2NyZWRlbnRpYWwtaXNzdWVyLmV4YW1wbGUuY29tIiwiaWF0IjoxNzAxOTYwNDQ0LCJub25jZSI6InRadWdubnNGYnAifQ.SIGNATURE"
-  }
-}
-```
-
-#### 요청 본문 (Case 2: `scope`를 사용한 경우)
-
-Token 응답에 `authorization_details`가 포함되지 않은 경우(예: `scope` 파라미터를 통해 Access Token을 획득한 경우), `format` 파라미터를 사용하여 요청합니다. `format` 값에 따라 `credential_definition` 또는 `doctype`과 같은 추가 파라미터가 포함될 수 있습니다.
-
-**예시 1: `jwt_vc_json` 형식 요청**
-
-```json
-{
-  "credential_configuration_ids": "UniversityDegree_JWT",
-  "proof": {
-    "proof_type": "jwt",
-    "jwt": "eyJhbGciOiJFUzI1NiIsImtpZCI6ImRpZDpleGF...In0.eyJhdWQiOiJodHRwczovL2NyZWRlbnRpYWwtaXNzdWVyLmV4YW1wbGUuY29tIiwiaWF0IjoxNzAxOTYwNDQ0LCJub25jZSI6InRadWdubnNGYnAifQ.SIGNATURE"
-  }
-}
-```
-
-**예시 2: `mso_mdoc` 형식 요청 (ISO mDL)**
-
-```json
-{
-  "credential_configuration_ids": "mso_mdoc",
-  "proof": {
-    "proof_type": "jwt",
-    "jwt": "eyJraWQiOiJkaWQ6ZXhhbXBsZTplYmZlYjFmNz...In0.ew...jM"
   }
 }
 ```
@@ -352,7 +325,7 @@ curl -X POST "http://${Host}:8080/notification" \
 
 ---
 
-### 3.8. Nonce 발급
+### 3.7. Nonce 발급
 
 - **URL**: `/nonce`
 - **Method**: `POST`
@@ -375,7 +348,7 @@ curl -X POST "http://${Host}:8080/nonce"
 
 ---
 
-### 3.9. Credential Identifier 조회
+### 3.8. Credential Identifier 조회
 
 - **URL**: `/get-credential-identifier`
 - **Method**: `GET`
@@ -428,4 +401,3 @@ curl -X GET "http://${Host}:8080/get-credential-identifier?credentialConfigurati
 - **URL**: `/oid4vci/test`
 - **Method**: `GET`
 - **설명**: Credential 발급 흐름을 테스트할 수 있는 웹 페이지를 제공합니다. QR 코드 생성 및 발급 과정을 시각적으로 확인할 수 있습니다.
-

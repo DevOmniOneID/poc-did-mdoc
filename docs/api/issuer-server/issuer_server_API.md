@@ -2,12 +2,13 @@
 
 - Subject: OID4VCI Issuer API Document
 - Writer: Sangjun Kim
-- Date: 2025-10-23
-- Version: v1.0.0
+- Date: 2026-06-19
+- Version: v1.1.0
 
 | Version | Date | History |
 | --- | --- | --- |
 | v1.0.0 | 2025-10-23 | Initial draft |
+| v1.1.0 | 2026-06-19 | Updated the Credential Offer route and Credential Request examples for the OID4VCI 1.0 contract |
 
 ## Table of Contents
 
@@ -37,7 +38,7 @@ This document defines the API for an Issuer service that complies with the [Open
 
 | API | Method | URL | Description |
 | --- | --- | --- | --- |
-| `Create Credential Offer` | GET | `/credential-offer/{request_id}` | Creates and returns a Credential Offer. |
+| `Create Credential Offer` | GET | `/credential-offer/{request_id}/{configuration_id}` | Creates and returns a Credential Offer for a credential configuration. |
 | `Get Issuer Metadata` | GET | `/.well-known/openid-credential-issuer` | Retrieves the Issuer's configuration information (Metadata). |
 | `Issue Access Token` | POST | `/token` | Exchanges a Pre-Authorized Code for an Access Token (when not using an authorization server). |
 | `Issue Credential` | POST | `/credential` | Issues a credential using an Access Token. |
@@ -52,18 +53,18 @@ This document defines the API for an Issuer service that complies with the [Open
 
 ### 3.1. Create Credential Offer
 
-- **URL**: `/credential-offer/{request_id}`
+- **URL**: `/credential-offer/{request_id}/{configuration_id}`
 - **Method**: `GET`
-- **Description**: Returns the Credential Offer information corresponding to the `request_id`. The flow branches to either `pre-authorized_code` (starts with `p`) or `authorization_code` (starts with `a`) based on the prefix of the `request_id`.
+- **Description**: Returns Credential Offer information for the `request_id` and `configuration_id`. The flow branches to either `pre-authorized_code` (starts with `p`) or `authorization_code` (starts with `a`) based on the prefix of the `request_id`. The `configuration_id` must be a key from `credential_configurations_supported` in the Issuer Metadata.
 
 #### Request Example
 
 ```shell
 # Pre-Authorized Code Flow
-curl -X GET "http://${Host}:8080/credential-offer/pGkurKxf5T0Y-mnPFCHqWOMiZi4VS138cQO_V7PZHAdM"
+curl -X GET "http://${Host}:8080/credential-offer/pGkurKxf5T0Y-mnPFCHqWOMiZi4VS138cQO_V7PZHAdM/UniversityDegree_JWT"
 
 # Authorization Code Flow
-curl -X GET "http://${Host}:8080/credential-offer/aGkurKxf5T0Y-mnPFCHqWOMiZi4VS138cQO_V7PZHAdM"
+curl -X GET "http://${Host}:8080/credential-offer/aGkurKxf5T0Y-mnPFCHqWOMiZi4VS138cQO_V7PZHAdM/UniversityDegree_JWT"
 ```
 
 #### Response Example (Pre-Authorized Code Flow)
@@ -198,11 +199,11 @@ curl -X POST "http://${Host}:8080/token" \
 
 - **URL**: `/credential`
 - **Method**: `POST`
-- **Description**: Requests the issuance of a credential from the Issuer using the issued Access Token. According to the OID4VCI standard, the content of the request body differs depending on whether `authorization_details` or `scope` was used in the authorization process. You can receive an immediate issuance or a deferred issuance response.
+- **Description**: Requests credential issuance using the Access Token and a `credential_identifier` authorized by the Token response. The response is either immediate or deferred.
 
-#### Request Body (Case 1: Using `authorization_details`)
+#### Request Body
 
-If the Token response includes `authorization_details`, the request is made using the `credential_identifiers` value from that response.
+Use one of the `credential_identifiers` returned in the Token response.
 
 ```json
 {
@@ -210,34 +211,6 @@ If the Token response includes `authorization_details`, the request is made usin
   "proof": {
     "proof_type": "jwt",
     "jwt": "eyJhbGciOiJFUzI1NiIsImtpZCI6ImRpZDpleGF...In0.eyJhdWQiOiJodHRwczovL2NyZWRlbnRpYWwtaXNzdWVyLmV4YW1wbGUuY29tIiwiaWF0IjoxNzAxOTYwNDQ0LCJub25jZSI6InRadWdubnNGYnAifQ.SIGNATURE"
-  }
-}
-```
-
-#### Request Body (Case 2: Using `scope`)
-
-If the Token response does not include `authorization_details` (e.g., if the Access Token was obtained via the `scope` parameter), the request is made using the `format` parameter. Depending on the `format` value, additional parameters such as `credential_definition` or `doctype` may be included.
-
-**Example 1: `jwt_vc_json` format request**
-
-```json
-{
-  "credential_configuration_ids": "UniversityDegree_JWT",
-  "proof": {
-    "proof_type": "jwt",
-    "jwt": "eyJhbGciOiJFUzI1NiIsImtpZCI6ImRpZDpleGF...In0.eyJhdWQiOiJodHRwczovL2NyZWRlbnRpYWwtaXNzdWVyLmV4YW1wbGUuY29tIiwiaWF0IjoxNzAxOTYwNDQ0LCJub25jZSI6InRadWdubnNGYnAifQ.SIGNATURE"
-  }
-}
-```
-
-**Example 2: `mso_mdoc` format request (ISO mDL)**
-
-```json
-{
-  "credential_configuration_ids": "mso_mdoc",
-  "proof": {
-    "proof_type": "jwt",
-    "jwt": "eyJraWQiOiJkaWQ6ZXhhbXBsZTplYmZlYjFmNz...In0.ew...jM"
   }
 }
 ```
@@ -351,7 +324,7 @@ curl -X POST "http://${Host}:8080/notification" \
 
 ---
 
-### 3.8. Issue Nonce
+### 3.7. Issue Nonce
 
 - **URL**: `/nonce`
 - **Method**: `POST`
@@ -374,7 +347,7 @@ curl -X POST "http://${Host}:8080/nonce"
 
 ---
 
-### 3.9. Get Credential Identifier
+### 3.8. Get Credential Identifier
 
 - **URL**: `/get-credential-identifier`
 - **Method**: `GET`

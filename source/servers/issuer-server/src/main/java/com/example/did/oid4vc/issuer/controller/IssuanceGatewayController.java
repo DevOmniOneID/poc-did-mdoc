@@ -16,13 +16,13 @@
 
 package com.example.did.oid4vc.issuer.controller;
 
+import com.google.zxing.WriterException;
+import com.nimbusds.jose.shaded.gson.Gson;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.omnione.did.oid4vc.oid4vci.exception.OID4VCIErrorCode;
 import org.omnione.did.oid4vc.oid4vci.exception.OID4VCIException;
 import org.omnione.did.oid4vc.oid4vci.service.IssuanceGatewayService;
-import com.nimbusds.jose.shaded.gson.Gson;
-import com.google.zxing.WriterException;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Controller;
@@ -43,7 +43,7 @@ public class IssuanceGatewayController {
 
     @GetMapping("/oid4vci/test")
     public String issue(Model model) {
-        return "issue";
+        return "issue_credential";
     }
 
     @PostMapping("/qr-data/generate-qr")
@@ -53,9 +53,10 @@ public class IssuanceGatewayController {
         String grantType = data.get("grantType");
         String offerType = data.get("offerType");
         String scheme = data.get("scheme");
+        String credentialConfigurationId = data.get("credentialConfigurationId");
 
         try {
-            Map<String, Object> response = issuanceGatewayService.generateCredentialOfferUri(userId, grantType, offerType, scheme);
+            Map<String, Object> response = issuanceGatewayService.generateCredentialOfferUri(userId, grantType, offerType, scheme, credentialConfigurationId);
             return ResponseEntity.ok(response);
         } catch (OID4VCIException e) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
@@ -70,6 +71,21 @@ public class IssuanceGatewayController {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(Map.of("error", OID4VCIErrorCode.ERR_CODE_GENERAL_UNEXPECTED_ERROR.getCode(),
                             "message", OID4VCIErrorCode.ERR_CODE_GENERAL_UNEXPECTED_ERROR.getMsg()));
+        }
+    }
+
+    @PostMapping("/qr-data/generate-qr-from-uri")
+    @ResponseBody
+    public ResponseEntity<Map<String, Object>> generateQrFromUri(@RequestBody Map<String, String> data) {
+        String uri = data.get("uri");
+        try {
+            Map<String, Object> response = issuanceGatewayService.generateQrFromUri(uri);
+            return ResponseEntity.ok(response);
+        } catch (IOException | WriterException e) {
+            log.error("Error generating QR from URI", e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of("error", OID4VCIErrorCode.ERR_CODE_OFFER_GENERATE_FAILED.getCode(),
+                            "message", OID4VCIErrorCode.ERR_CODE_OFFER_GENERATE_FAILED.getMsg()));
         }
     }
 

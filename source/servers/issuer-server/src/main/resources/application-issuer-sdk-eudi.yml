@@ -28,7 +28,7 @@ issuer:
         identifiers:
           - NationalIDCert
       mDoc:
-        format: mso-mdoc
+        format: mso-mdoc-did
         identifiers:
           - mDL
           - mDocPID

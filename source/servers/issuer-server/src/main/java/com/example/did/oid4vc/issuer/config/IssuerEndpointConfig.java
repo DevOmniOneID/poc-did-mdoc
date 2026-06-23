@@ -17,14 +17,14 @@
 package com.example.did.oid4vc.issuer.config;
 
 import com.example.did.oid4vc.issuer.controller.CredentialIssuanceController;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.omnione.did.oid4vc.oid4vci.dto.credential.CredentialRequest;
 import org.omnione.did.oid4vc.oid4vci.dto.credential.DeferredCredentialRequest;
 import org.omnione.did.oid4vc.oid4vci.dto.metadata.IssuerMetadataResponse;
 import org.omnione.did.oid4vc.oid4vci.dto.notification.NotificationRequest;
 import org.omnione.did.oid4vc.oid4vci.exception.OID4VCIException;
 import org.omnione.did.oid4vc.oid4vci.service.CredentialService;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.event.EventListener;
@@ -51,7 +51,7 @@ public class IssuerEndpointConfig {
         try {
             IssuerMetadataResponse metadata = credentialService.getIssuerMetadata();
 
-            registerEndpoint(metadata.getCredentialOfferEndpoint(), RequestMethod.GET, "getCredentialOffer", String.class);
+            registerEndpoint(metadata.getCredentialOfferEndpoint(), RequestMethod.GET, "getCredentialOffer", String.class, String.class);
             registerEndpoint(metadata.getCredentialEndpoint(), RequestMethod.POST, "issueCredential", CredentialRequest.class, Jwt.class);
             registerEndpoint(metadata.getNonceEndpoint(), RequestMethod.POST, "handleNonce");
             registerEndpoint(metadata.getDeferredCredentialEndpoint(), RequestMethod.POST, "getDeferredCredential", DeferredCredentialRequest.class, Jwt.class);
@@ -76,7 +76,7 @@ public class IssuerEndpointConfig {
             }
 
             if ("getCredentialOffer".equals(methodName) && !path.contains("{")) {
-                path = path.endsWith("/") ? path + "{request_id}" : path + "/{request_id}";
+                path = path.endsWith("/") ? path + "{request_id}/{configuration_id}" : path + "/{request_id}/{configuration_id}";
             }
 
             Method method = CredentialIssuanceController.class.getMethod(methodName, parameterTypes);
