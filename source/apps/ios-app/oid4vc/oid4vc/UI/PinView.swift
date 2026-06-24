@@ -20,8 +20,8 @@ import SwiftUI
 struct PinView: View {
     @State private var pin: String = ""
     var onPinEntered: (String) -> Void
-    
-    private let maxPinLength = 4
+
+    private let maxPinLength = 6
     private let columns: [GridItem] = Array(repeating: .init(.flexible()), count: 3)
     
     /// The user interface body of the PIN entry view.
@@ -68,7 +68,7 @@ private struct PinIndicator: View {
 /// A view that provides a grid of numeric keys for inputting a PIN.
 private struct KeypadView: View {
     @Binding var pin: String
-    private let maxPinLength = 4
+    private let maxPinLength = 6
     private let keys = [
         "1", "2", "3",
         "4", "5", "6",

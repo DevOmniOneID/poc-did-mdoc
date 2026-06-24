@@ -21,7 +21,6 @@ import android.os.Bundle;
 import android.view.View;
 import android.widget.Button;
 import android.widget.ImageView;
-import android.widget.Toast;
 
 import androidx.appcompat.app.AppCompatActivity;
 
@@ -32,7 +31,7 @@ import org.omnione.did.sdk.oid4vc.R;
 
 public class PinActivity extends AppCompatActivity implements View.OnClickListener {
 
-    private final static int MAX_PIN_LENGTH = 4;
+    private final static int MAX_PIN_LENGTH = 6;
     private StringBuilder pinBuilder = new StringBuilder();
 
     private List<ImageView> dots = new ArrayList<>();
@@ -62,6 +61,8 @@ public class PinActivity extends AppCompatActivity implements View.OnClickListen
         dots.add(findViewById(R.id.dot2));
         dots.add(findViewById(R.id.dot3));
         dots.add(findViewById(R.id.dot4));
+        dots.add(findViewById(R.id.dot5));
+        dots.add(findViewById(R.id.dot6));
 
         findViewById(R.id.button0).setOnClickListener(this);
         findViewById(R.id.button1).setOnClickListener(this);
